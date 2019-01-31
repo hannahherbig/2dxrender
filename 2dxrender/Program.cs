@@ -25,6 +25,7 @@ namespace _2dxrender
             KeyP2 = 1,
             LoadSampleP1 = 2,
             LoadSampleP2 = 3,
+            End = 6,
             BgmNote = 7,
         }
 
@@ -252,8 +253,7 @@ namespace _2dxrender
 
                             sounds.Add(new KeyPosition(offset, loaded_samples[playerId][param], param, playerId));
                         }
-
-                        if (ev["event"] == "sample_p1" || ev["event"] == "sample_p2")
+                        else if (ev["event"] == "sample_p1" || ev["event"] == "sample_p2")
                         {
                             var playerId = ev["event"] == "sample_p1" ? 0 : 1;
                             int value = ev["sound_id"];
@@ -271,8 +271,7 @@ namespace _2dxrender
                                 }
                             }
                         }
-
-                        if (ev["event"] == "auto")
+                        else if (ev["event"] == "auto")
                         {
                             int value = ev["sound_id"];
                             int sample_idx = findSampleById(samples, value, soundFolder);
@@ -283,6 +282,11 @@ namespace _2dxrender
                             }
 
                             sounds.Add(new KeyPosition(offset, sample_idx, -1, 0));
+                        }
+                        else if (ev["event"] == "end")
+                        {
+                            int value = ev["player"];
+                            sounds.Add(new KeyPosition(offset, -1, -1, value));
                         }
                     }
                 }
@@ -366,6 +370,12 @@ namespace _2dxrender
                             sounds.Add(new KeyPosition(offset, value - 1, -1, 0));
                         }
                         break;
+
+                    case (byte)ChartCommands.End:
+                        {
+                            sounds.Add(new KeyPosition(offset, -1, -1, param));
+                        }
+                        break;
                 }
             }
 
@@ -411,12 +421,23 @@ namespace _2dxrender
         {
             var mixedSamples = new List<OffsetSampleProvider>();
 
+            // Find P1 and P2 ends
+            int[] playerEnd = { -1, -1 };
+            foreach (var sound in sounds)
+            {
+                if (sound.keysoundId == -1 && sound.key == -1)
+                {
+                    playerEnd[sound.player] = sound.offset;
+                }
+            }
+
             foreach (var sound in sounds)
             {
                 if (sound.keysoundId == -1)
                     continue;
 
-                var volSample = new VolumeSampleProvider(new AudioFileReader(samples[sound.keysoundId]));
+                var audioFile = new AudioFileReader(samples[sound.keysoundId]);
+                var volSample = new VolumeSampleProvider(audioFile);
 
                 if (volSample.WaveFormat.Channels == 1)
                 {
@@ -449,6 +470,12 @@ namespace _2dxrender
 
                 var sample = new OffsetSampleProvider(volSample);
                 sample.DelayBy = TimeSpan.FromMilliseconds(sound.offset);
+
+                if (sound.player >= 0 && sound.player <= 1 && playerEnd[sound.player] != -1 && sound.offset + audioFile.TotalTime.TotalMilliseconds > playerEnd[sound.player])
+                {
+                    sample.Take = TimeSpan.FromMilliseconds(playerEnd[sound.player] - sound.offset);
+                }
+
                 mixedSamples.Add(sample);
             }
 
