@@ -422,7 +422,7 @@ namespace _2dxrender
             var mixedSamples = new List<OffsetSampleProvider>();
 
             // Find P1 and P2 ends
-            int[] playerEnd = new int[2];
+            int[] playerEnd = { -1, -1 };
             foreach (var sound in sounds)
             {
                 if (sound.keysoundId == -1 && sound.key == -1)
@@ -471,7 +471,7 @@ namespace _2dxrender
                 var sample = new OffsetSampleProvider(volSample);
                 sample.DelayBy = TimeSpan.FromMilliseconds(sound.offset);
 
-                if (sound.player >= 0 && sound.player <= 1 && sound.offset + audioFile.TotalTime.TotalMilliseconds > playerEnd[sound.player])
+                if (sound.player >= 0 && sound.player <= 1 && playerEnd[sound.player] != -1 && sound.offset + audioFile.TotalTime.TotalMilliseconds > playerEnd[sound.player])
                 {
                     sample.Take = TimeSpan.FromMilliseconds(playerEnd[sound.player] - sound.offset);
                 }
