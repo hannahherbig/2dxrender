@@ -201,7 +201,7 @@ namespace _2dxrender
                     return idx;
                 }
             }
-            
+
             return -1;
         }
 
@@ -226,7 +226,7 @@ namespace _2dxrender
                     for (int eventidx = 0; eventidx < _ev.Count; eventidx++)
                     {
                         var ev = _ev[eventidx];
-                        
+
                         int offset = ev["offset"];
 
                         if ((ev["event"] == "note_p1" || ev["event"] == "note_p2") && offset != 0)
@@ -235,11 +235,11 @@ namespace _2dxrender
                             int value = ev["value"];
                             short param = ev["slot"];
 
-                            if (value != 0)
+                            if (value != 0 && param == 7)
                             {
                                 sounds.Add(new KeyPosition(offset + value, loaded_samples[playerId][param], param, playerId));
 
-                                if (options.AssistClap && param == 7)
+                                if (options.AssistClap)
                                 {
                                     sounds.Add(new KeyPosition(offset + value, assistClapIdx, -1, 0));
                                 }
@@ -249,7 +249,7 @@ namespace _2dxrender
                             {
                                 sounds.Add(new KeyPosition(offset, assistClapIdx, -1, 0));
                             }
-                            
+
                             sounds.Add(new KeyPosition(offset, loaded_samples[playerId][param], param, playerId));
                         }
 
@@ -287,7 +287,7 @@ namespace _2dxrender
                     }
                 }
             }
-            
+
             return sounds;
         }
 
@@ -412,7 +412,7 @@ namespace _2dxrender
             var mixedSamples = new List<OffsetSampleProvider>();
 
             foreach (var sound in sounds)
-            {   
+            {
                 if (sound.keysoundId == -1)
                     continue;
 
@@ -457,7 +457,7 @@ namespace _2dxrender
             {
                 mixers.Add(new MixingSampleProvider(mixedSamples.Skip(i).Take(128).ToArray()));
             }
-            
+
             var mixer = new MixingSampleProvider(mixers);
 
             if (options.OutputFormat.ToLower() == "wav")
@@ -478,13 +478,13 @@ namespace _2dxrender
                 id3.Genre = options.Id3Genre;
                 id3.Track = options.Id3Track;
                 id3.Year = options.Id3Year;
-                
+
                 using (var reader = new AudioFileReader(tempFilename))
                 using (var writer = new LameMP3FileWriter(outputFilename, reader.WaveFormat, 320, id3))
                 {
                     reader.CopyTo(writer);
                 }
-                
+
                 File.Delete(tempFilename);
             }
         }
