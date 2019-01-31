@@ -35,8 +35,32 @@ def read_charts(mid, input_chart, input_sounds, metadata, output_folder="", char
 
         id3_str = ""
         if metadata:
+            id3_parts = []
+
+            if 'artist' in metadata and metadata['artist']:
+                id3_parts.append('--id3-artist "{}"'.format(metadata['artist']))
+
+            if 'title' in metadata and metadata['title']:
+                id3_parts.append('--id3-title "{}"'.format(metadata['title']))
+
+            if 'genre' in metadata and metadata['genre']:
+                id3_parts.append('--id3-genre "{}"'.format(metadata['genre']))
+
+            if 'album' in metadata and metadata['album']:
+                id3_parts.append('--id3-album "{}"'.format(metadata['album']))
+
+            if 'album_artist' in metadata and metadata['album_artist']:
+                id3_parts.append('--id3-album-artist "{}"'.format(metadata['album_artist']))
+
+            if 'year' in metadata and metadata['year']:
+                id3_parts.append('--id3-year "{}"'.format(metadata['year']))
+
+            if 'mid' in metadata and metadata['mid']:
+                id3_parts.append('--id3-track "{}"'.format(metadata['mid']))
+
+            id3_str = " ".join(id3_parts)
+
             if output_format.lower() == "mp3":
-                id3_str = ""
                 output_filename = os.path.join(output_folder, get_sanitized_filename("[%04d] %s - %s (%s).mp3" % (metadata.get('mid', ''), metadata.get('artist', ''), metadata.get('title', ''), chart_labels[i])))
 
             else:
@@ -49,8 +73,8 @@ def read_charts(mid, input_chart, input_sounds, metadata, output_folder="", char
             else:
                 output_filename = "%d.wav" % mid
 
+        print("Rendering", input_chart)
         subprocess.call("2dxrender.exe -i \"%s\" -s \"%s\" -o \"%s\" -c %d %s" % (input_chart, input_sounds, output_filename, i, id3_str), shell=True)
-
         print("Saved", output_filename)
 
 
@@ -58,13 +82,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--songs-folder', help='Input songs folder', required=True)
     parser.add_argument('--output-folder', default="renders", help='Output folder')
-    parser.add_argument('--music-database-file', default='music_database.bin', help='Input music database file')
+    parser.add_argument('--music-database-file', default='music_data.bin', help='Input music database file')
     parser.add_argument('--charts', nargs='+', default=[2], help='Charts to render for each song', type=int)
     parser.add_argument('--id3-album', help='ID3 album', default="", type=str)
     parser.add_argument('--id3-album-artist', help='ID3 album artist', default="", type=str)
     parser.add_argument('--id3-year', help='ID3 year', default="", type=str)
-    parser.add_argument('--id3-album-art', help='ID3 album art', default="", type=str)
     parser.add_argument('--output-format', help='Output format: WAV or MP3', default="mp3", type=str)
+    parser.add_argument('--threads', help='Max number of threads to use for rendering songs', default=4, type=int)
     args = parser.parse_args()
 
     song_info = {}
@@ -81,7 +105,6 @@ if __name__ == '__main__':
                 'album': args.id3_album,
                 'album_artist': args.id3_album_artist,
                 'year': args.id3_year,
-                'album_art': args.id3_album_art,
                 'mid': mid,
             }
 
@@ -99,11 +122,9 @@ if __name__ == '__main__':
 
             q.task_done()
 
-    num_worker_threads = 8
-
     q = queue.Queue()
     threads = []
-    for i in range(num_worker_threads):
+    for i in range(args.threads):
         t = threading.Thread(target=worker)
         t.start()
         threads.append(t)
@@ -120,7 +141,7 @@ if __name__ == '__main__':
     q.join()
 
     # stop workers
-    for i in range(num_worker_threads):
+    for i in range(args.threads):
         q.put(None)
     for t in threads:
         t.join()

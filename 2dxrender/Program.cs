@@ -58,7 +58,13 @@ namespace _2dxrender
 
             var fileCount = reader.ReadUInt32();
 
-            var tempPath = Path.GetTempPath();
+            var tempPath = GetTempFileName();
+
+            if (!Directory.Exists(tempPath))
+            {
+                Directory.CreateDirectory(tempPath);
+            }
+
             for (var i = 0; i < fileCount; i++)
             {
                 reader.BaseStream.Seek(i * 8 + 8, SeekOrigin.Begin);
@@ -312,11 +318,11 @@ namespace _2dxrender
                         {
                             var playerId = command - (byte)ChartCommands.KeyP1;
 
-                            if (value != 0)
+                            if (value != 0 && param == 7)
                             {
                                 sounds.Add(new KeyPosition(offset + value, loaded_samples[playerId][param], param, playerId));
 
-                                if (options.AssistClap && param == 7)
+                                if (options.AssistClap)
                                 {
                                     sounds.Add(new KeyPosition(offset + value, assistClapIdx, -1, 0));
                                 }
@@ -404,6 +410,7 @@ namespace _2dxrender
         private static void mixFinalAudio(string outputFilename, List<KeyPosition> sounds, List<string> samples)
         {
             var mixedSamples = new List<OffsetSampleProvider>();
+
             foreach (var sound in sounds)
             {   
                 if (sound.keysoundId == -1)
@@ -416,7 +423,7 @@ namespace _2dxrender
                     volSample = new VolumeSampleProvider(volSample.ToStereo());
                 }
 
-                if (volSample.WaveFormat.SampleRate != 441000)
+                if (volSample.WaveFormat.SampleRate != 44100)
                 {
                     // Causes pop sound at end of audio
                     volSample = new VolumeSampleProvider(
@@ -471,18 +478,13 @@ namespace _2dxrender
                 id3.Genre = options.Id3Genre;
                 id3.Track = options.Id3Track;
                 id3.Year = options.Id3Year;
-
-                if (File.Exists(options.Id3AlbumArt))
-                {
-                    id3.AlbumArt = File.ReadAllBytes(options.Id3AlbumArt);
-                }
-
+                
                 using (var reader = new AudioFileReader(tempFilename))
                 using (var writer = new LameMP3FileWriter(outputFilename, reader.WaveFormat, 320, id3))
                 {
                     reader.CopyTo(writer);
                 }
-
+                
                 File.Delete(tempFilename);
             }
         }

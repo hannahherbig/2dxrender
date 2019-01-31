@@ -34,9 +34,6 @@ namespace _2dxrender
         [Option('f', "output-format", Default = "mp3", HelpText = "Output file format (WAV or MP3)")]
         public string OutputFormat { get; set; }
 
-        [Option("id3-album-art", Default = "", HelpText = "ID3 album art")]
-        public string Id3AlbumArt { get; set; }
-
         [Option("id3-album", Default = "", HelpText = "ID3 album tag")]
         public string Id3Album { get; set; }
 
