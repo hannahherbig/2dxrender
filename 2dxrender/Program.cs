@@ -206,7 +206,7 @@ namespace _2dxrender
             return -1;
         }
 
-        private static List<KeyPosition> parseJsonChartData(string filename, List<string> samples)
+        private static List<KeyPosition> parseJsonChartData(string filename, List<string> samples, int chartId)
         {
             var sounds = new List<KeyPosition>();
             var loaded_samples = new List<Dictionary<short, int>>(){
@@ -214,76 +214,128 @@ namespace _2dxrender
                 new Dictionary<short, int>()
             };
 
+            var chartIdLookup = new Dictionary<int, string>()
+            {
+                { 0, "input_sp_normal" },
+                { 1, "input_sp_hyper" },
+                { 2, "input_sp_another" },
+                { 3, "input_sp_beginner" },
+                { 4, "input_sp_black" },
+                { 6, "input_dp_normal" },
+                { 7, "input_dp_hyper" },
+                { 8, "input_dp_another" },
+                { 9, "input_dp_beginner" },
+                { 10, "input_dp_black" },
+            };
+
             var json = File.ReadAllText(filename);
             dynamic _chartData = JsonConvert.DeserializeObject(json);
-            dynamic chartData = _chartData["charts"][0];
+
+            int chartIdx = -1;
+            foreach (var chart in _chartData["charts"])
+            {
+                chartIdx++;
+
+                if (chart["chart_type"] == chartIdLookup[chartId])
+                {
+                    break;
+                }
+            }
+
+            if (chartIdx == -1)
+            {
+                Console.WriteLine("Couldn't find selected chart: {0}", chartId);
+                Environment.Exit(1);
+            }
+
+            dynamic chartData = _chartData["charts"][chartIdx];
 
             var soundFolder = Path.GetDirectoryName(samples[0]);
 
-            foreach (var events in chartData["events"])
+            bool isFloat = false;
+            var dicts = chartData["events"].ToObject<Dictionary<string, object>>();
+            var keys = new List<string>();
+            foreach (var dict in dicts)
             {
-                foreach (var _ev in events)
+                keys.Add(dict.Key);
+            }
+
+            foreach (var key in keys)
+            {
+                string k = key.ToString();
+
+                if (isFloat)
                 {
-                    for (int eventidx = 0; eventidx < _ev.Count; eventidx++)
+                    k = String.Format("{0:f}", key);
+                }
+                var _ev = chartData["events"][k];
+                for (int eventidx = 0; eventidx < _ev.Count; eventidx++)
+                {
+                    var ev = _ev[eventidx];
+
+                    int offset = ev["offset"];
+
+                    if ((ev["event"] == "note_p1" || ev["event"] == "note_p2") && offset != 0)
                     {
-                        var ev = _ev[eventidx];
+                        var playerId = ev["event"] == "note_p1" ? 0 : 1;
+                        int value = ev["value"];
+                        short param = ev["slot"];
 
-                        int offset = ev["offset"];
-
-                        if ((ev["event"] == "note_p1" || ev["event"] == "note_p2") && offset != 0)
+                        if (value != 0 && param == 7)
                         {
-                            var playerId = ev["event"] == "note_p1" ? 0 : 1;
-                            int value = ev["value"];
-                            short param = ev["slot"];
+                            sounds.Add(new KeyPosition(offset + value, loaded_samples[playerId][param], param, playerId));
 
-                            if (value != 0 && param == 7)
+                            if (options.AssistClap)
                             {
-                                sounds.Add(new KeyPosition(offset + value, loaded_samples[playerId][param], param, playerId));
-
-                                if (options.AssistClap)
-                                {
-                                    sounds.Add(new KeyPosition(offset + value, assistClapIdx, -1, 0));
-                                }
-                            }
-
-                            if (options.AssistClap && param == 7)
-                            {
-                                sounds.Add(new KeyPosition(offset, assistClapIdx, -1, 0));
-                            }
-
-                            sounds.Add(new KeyPosition(offset, loaded_samples[playerId][param], param, playerId));
-                        }
-                        else if (ev["event"] == "sample_p1" || ev["event"] == "sample_p2")
-                        {
-                            var playerId = ev["event"] == "sample_p1" ? 0 : 1;
-                            int value = ev["sound_id"];
-                            short param = ev["slot"];
-
-                            loaded_samples[playerId][param] = findSampleById(samples, value, soundFolder);
-
-                            // To simulate the engine loading a new sample before it's played, loop through and update everything
-                            // for that specific key from the current offset onward
-                            for (int i = 0; i < sounds.Count; i++)
-                            {
-                                if (sounds[i].player == playerId && sounds[i].key == param && sounds[i].offset >= offset)
-                                {
-                                    sounds[i].keysoundId = loaded_samples[playerId][param];
-                                }
+                                sounds.Add(new KeyPosition(offset + value, assistClapIdx, -1, 0));
                             }
                         }
-                        else if (ev["event"] == "auto")
+
+                        if (options.AssistClap && param == 7)
                         {
-                            int value = ev["sound_id"];
-                            int sample_idx = findSampleById(samples, value, soundFolder);
-
-                            if (sample_idx == 0 && options.NoBgm)
-                            {
-                                continue;
-                            }
-
-                            sounds.Add(new KeyPosition(offset, sample_idx, -1, 0));
+                            sounds.Add(new KeyPosition(offset, assistClapIdx, -1, 0));
                         }
-                        else if (ev["event"] == "end")
+                        
+                        sounds.Add(new KeyPosition(offset, loaded_samples[playerId][param], param, playerId));
+                    }
+                    else if (ev["event"] == "sample_p1" || ev["event"] == "sample_p2")
+                    {
+                        var playerId = ev["event"] == "sample_p1" ? 0 : 1;
+                        int value = ev["sound_id"];
+                        short param = ev["slot"];
+
+                        loaded_samples[playerId][param] = findSampleById(samples, value, soundFolder);
+
+                        // To simulate the engine loading a new sample before it's played, loop through and update everything
+                        // for that specific key from the current offset onward
+                        for (int i = 0; i < sounds.Count; i++)
+                        {
+                            if (sounds[i].player == playerId && sounds[i].key == param && sounds[i].offset >= offset)
+                            {
+                                sounds[i].keysoundId = loaded_samples[playerId][param];
+                            }
+                        }
+                    }
+                    else if (ev["event"] == "auto")
+                    {
+                        int value = ev["sound_id"];
+                        int sample_idx = findSampleById(samples, value, soundFolder);
+
+                        if (sample_idx == 0 && options.NoBgm)
+                        {
+                            continue;
+                        }
+
+                        sounds.Add(new KeyPosition(offset, sample_idx, -1, 0));
+                    }
+                    else if (ev["event"] == "end")
+                    {
+                        if (ev["player"] == null)
+                        {
+                            sounds.Add(new KeyPosition(offset, -1, -1, 0));
+                            sounds.Add(new KeyPosition(offset, -1, -1, 1));
+                        }
+                        else
                         {
                             int value = ev["player"];
                             sounds.Add(new KeyPosition(offset, -1, -1, value));
@@ -392,7 +444,7 @@ namespace _2dxrender
 
             if (filename.EndsWith(".json"))
             {
-                var sounds = parseJsonChartData(filename, samples);
+                var sounds = parseJsonChartData(filename, samples, chartId);
                 mixFinalAudio(outputFilename, sounds, samples);
                 return;
             }
@@ -482,7 +534,8 @@ namespace _2dxrender
             var mixers = new List<MixingSampleProvider>();
             for (int i = 0; i < mixedSamples.Count; i += 128)
             {
-                mixers.Add(new MixingSampleProvider(mixedSamples.Skip(i).Take(128).ToArray()));
+                var arr = mixedSamples.Skip(i).Take(128).ToArray();
+                mixers.Add(new MixingSampleProvider(arr));
             }
 
             var mixer = new MixingSampleProvider(mixers);
