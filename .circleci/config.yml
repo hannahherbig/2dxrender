@@ -1,0 +1,21 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: windyfairy/cienv
+
+    steps:
+      - checkout
+
+      - run:
+          name: Build project
+          command: pushd 2dxrender && nuget restore -SolutionDirectory . -PackagesDirectory packages && msbuild /p:Configuration=Release 2dxrender.csproj && popd
+
+      - deploy:
+          name: Deploy
+          command: |
+            if [ "${CIRCLE_BRANCH}" == "master" ]; then
+              mkdir -p deploy
+              pushd 2dxrender/bin/Release/ && zip -r ../../../deploy/release.zip * && popd
+              ghr -t "${GITHUB_TOKEN}" -u "${CIRCLE_PROJECT_USERNAME}" -r "${CIRCLE_PROJECT_REPONAME}" -c "${CIRCLE_SHA1}" -delete "release-`date '+%Y%m%d-%H%M%S'`" deploy/
+            fi
